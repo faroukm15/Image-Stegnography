@@ -1,0 +1,1593 @@
+Microsoft (R) Macro Assembler Version 14.00.24210.0	    12/28/16 03:54:26
+AddTwo.asm						     Page 1 - 1
+
+
+
+				INCLUDE Irvine32.inc
+			      C ; Include file for Irvine32.lib             (Irvine32.inc)
+			      C 
+			      C ;OPTION CASEMAP:NONE		; optional: make identifiers case-sensitive
+			      C 
+			      C INCLUDE SmallWin.inc		; MS-Windows prototypes, structures, and constants
+			      C .NOLIST
+			      C .LIST
+			      C 
+			      C INCLUDE VirtualKeys.inc
+			      C ; VirtualKeys.inc
+			      C .NOLIST
+			      C .LIST
+			      C 
+			      C 
+			      C .NOLIST
+			      C .LIST
+			      C 
+
+
+ 00000000			.data
+
+ 00000000 45 52 52 4F 52	errorMsg1 byte "ERROR: file not found", 0
+	   3A 20 66 69 6C
+	   65 20 6E 6F 74
+	   20 66 6F 75 6E
+	   64 00
+ 00000016 45 52 52 4F 52	errorMsg2 byte "ERROR: cannot read file", 0
+	   3A 20 63 61 6E
+	   6E 6F 74 20 72
+	   65 61 64 20 66
+	   69 6C 65 00
+ 0000002E 45 52 52 4F 52	errorMsg3 byte "ERROR: writing to file failed", 0
+	   3A 20 77 72 69
+	   74 69 6E 67 20
+	   74 6F 20 66 69
+	   6C 65 20 66 61
+	   69 6C 65 64 00
+ 0000004C 45 52 52 4F 52	errorMsg4 byte "ERROR: creating output file failed", 0
+	   3A 20 63 72 65
+	   61 74 69 6E 67
+	   20 6F 75 74 70
+	   75 74 20 66 69
+	   6C 65 20 66 61
+	   69 6C 65 64 00
+
+ 0000006F 50 6C 65 61 73	Msg1 byte "Please Enter your MSG: ", 0
+	   65 20 45 6E 74
+	   65 72 20 79 6F
+	   75 72 20 4D 53
+	   47 3A 20 00
+ 00000087 50 6C 65 61 73	Msg2 byte "Please Enter your Key: ", 0
+	   65 20 45 6E 74
+	   65 72 20 79 6F
+	   75 72 20 4B 65
+	   79 3A 20 00
+ 0000009F 50 6C 65 61 73	Msg3 byte "Please Enter file name: ", 0
+	   65 20 45 6E 74
+	   65 72 20 66 69
+	   6C 65 20 6E 61
+	   6D 65 3A 20 00
+ 000000B8 45 6E 63 72 79	Msg4 byte "Encrypt or Decrypt : (0/1) ", 0
+	   70 74 20 6F 72
+	   20 44 65 63 72
+	   79 70 74 20 3A
+	   20 28 30 2F 31
+	   29 20 00
+ 000000D4 43 6F 6E 74 69	Msg5 byte "Continue : (yes is 1, No is 0)", 0
+	   6E 75 65 20 3A
+	   20 28 79 65 73
+	   20 69 73 20 31
+	   2C 20 4E 6F 20
+	   69 73 20 30 29
+	   00
+
+ 000000F3 00			programChoice byte 0
+
+ 000000F4 00000064		maxLength dword 100
+
+ 000000F8 00000000		fileDir dword 0
+ 000000FC 00000000		fileSize dword 0
+
+ 00000100 00			fileFound Byte 0 ; boolean
+
+ 00000101 4F 75 74 70 75	outputDir byte "Output.txt", 0
+	   74 2E 74 78 74
+	   00
+ 0000010C 00000000		outputHandle dword 0
+
+ 00000110 00000000		lengthR dword 0 ; used for reading
+ 00000114 00000000		lengthRead dword 0
+ 00000118 00000000		toWrite dword 0
+ 0000011C 00000000		ptrForN dword 0 ; pointer for newline
+ 00000120 00000000		tmpVar1 dword 0
+ 00000124 00000000		tmpVar2 dword 0
+ 00000128 00000000		msgLen dword 0
+ 0000012C 00			twoDigit byte 0; boolean for encrypting msgLen
+				; for proto i will use 8 bit key
+ 0000012D 00			key byte 0
+ 0000012E 00000000		KeyLen dword 0
+ 00000132 00			currLetter byte 0
+
+ 00000133  00000064 [		filePath byte 100 dup(?)
+	    00
+	   ]
+ 00000197  000003E8 [		msg byte 1000 dup(?) 
+	    00
+	   ]
+ 0000057F  000003E8 [		decMsg byte 1000 dup(?)
+	    00
+	   ]
+ 00000967  00000028 [		bssBuf byte 40 dup(?)
+	    00
+	   ]
+
+ 00000000			.code
+
+				; Main DLL entry point, takes 3 parameters from loading application (unused in this particular library)
+ 00000000			LibMain PROC instance:DWORD, reason:DWORD, unused:DWORD	
+ 00000000  55		   *	    push   ebp
+ 00000001  8B EC	   *	    mov    ebp, esp
+ 00000003  B8 00000001			mov eax, TRUE			;return TRUE to host Application to mark successful Library Loading.
+					ret
+ 00000008  C9		   *	    leave  
+ 00000009  C2 000C	   *	    ret    0000Ch
+ 0000000C			LibMain ENDP
+AddTwo.asm(54) : warning A6004:procedure argument or local not referenced : instance
+AddTwo.asm(54) : warning A6004:procedure argument or local not referenced : reason
+AddTwo.asm(54) : warning A6004:procedure argument or local not referenced : unused
+
+
+				;----------------------------------------------------------------
+				;Take From Host Application the file name to open
+				;register input: ebp
+				;----------------------------------------------------------------
+ 0000000C			GetName PROC USES ebx ecx edx
+ 0000000C  53		   *	    push   ebx
+ 0000000D  51		   *	    push   ecx
+ 0000000E  52		   *	    push   edx
+ 0000000F  C8 0000 00			ENTER 0, 0
+ 00000013  60				pushad
+ 00000014  8B 75 08			mov esi, [ebp + 8]
+ 00000017  BF 00000133 R		mov edi, offset filepath
+ 0000001C  4F				dec edi
+ 0000001D				LCOPY:
+ 0000001D  47					inc edi
+ 0000001E  8A 06				mov al, [esi]
+ 00000020  88 07				mov [edi], al
+ 00000022  46					inc esi
+ 00000023  80 3F 00				cmp BYTE PTR[edi], 0
+ 00000026  75 F5			Jne LCOPY
+ 00000028  61				popad
+ 00000029  C9				leave
+					ret
+ 0000002A  5A		   *	    pop    edx
+ 0000002B  59		   *	    pop    ecx
+ 0000002C  5B		   *	    pop    ebx
+ 0000002D  C3		   *	    ret    00000h
+
+ 0000002E			GetName ENDP
+
+				;----------------------------------------------------------------
+				;Prints the recent file opened
+				;----------------------------------------------------------------
+ 0000002E			PrintName PROC USES edx
+ 0000002E  52		   *	    push   edx
+ 0000002F  BA 00000133 R			mov edx, OFFSET filePath
+ 00000034  E8 00000000 E			call WriteString
+ 00000039  E8 00000000 E			call Crlf
+					ret
+ 0000003E  5A		   *	    pop    edx
+ 0000003F  C3		   *	    ret    00000h
+ 00000040			PrintName ENDP
+
+				;----------------------------------------------------------------
+				;Opens the file recieved in proc getName
+				;if not found throws error
+				;----------------------------------------------------------------
+ 00000040			OpenFile PROC USES ebx eax ecx edx ; fileName function mode
+ 00000040  53		   *	    push   ebx
+ 00000041  50		   *	    push   eax
+ 00000042  51		   *	    push   ecx
+ 00000043  52		   *	    push   edx
+ 00000044  C8 0000 00			enter 0, 0
+ 00000048  60				pushad
+
+ 00000049  BA 00000133 R		mov edx, OFFSET filePath
+ 0000004E  E8 00000000 E		call OpenInputFile
+					
+ 00000053  83 F8 00			cmp eax, 0
+ 00000056  7F 02			jg open_succeeded	;jnc open_successed
+
+					;mov ecx, [ebp + 8]
+ 00000058				errorOpen:
+ 00000058  EB 05				jmp doneOpen
+ 0000005A				open_succeeded:
+ 0000005A  A3 000000F8 R			mov fileDir, eax
+ 0000005F				doneOpen:
+ 0000005F  61				popad
+ 00000060  C9				leave
+					ret
+ 00000061  5A		   *	    pop    edx
+ 00000062  59		   *	    pop    ecx
+ 00000063  58		   *	    pop    eax
+ 00000064  5B		   *	    pop    ebx
+ 00000065  C3		   *	    ret    00000h
+ 00000066			OpenFile ENDP
+
+				;----------------------------------------------------------------
+				;Creates a file for output called "Output.txt"
+				; returns file handler 
+				;----------------------------------------------------------------
+ 00000066			outPutFileCreation PROC USES edx eax
+ 00000066  52		   *	    push   edx
+ 00000067  50		   *	    push   eax
+ 00000068  BA 00000101 R			mov edx, offset outputDir
+ 0000006D  E8 00000000 E			call CreateOutputFile
+ 00000072  83 F8 00				cmp eax, 0
+ 00000075  7F 11				jg creation_succeeded
+ 00000077					errorCreation:
+ 00000077  BA 0000004C R				mov edx, OFFSET errorMsg4
+ 0000007C  E8 00000000 E				call WriteString
+ 00000081  E8 00000000 E				call Crlf
+ 00000086  EB 05					jmp doneCreation
+ 00000088					creation_succeeded:
+ 00000088  A3 0000010C R				mov outputHandle, eax
+ 0000008D					doneCreation:
+							
+					ret
+ 0000008D  58		   *	    pop    eax
+ 0000008E  5A		   *	    pop    edx
+ 0000008F  C3		   *	    ret    00000h
+ 00000090			outPutFileCreation ENDP
+
+				;----------------------------------------------------------------
+				;Reads the file opened for certain length
+				; recieves: lengthR the number of bytes to be read
+				; return: bssBuff array of read bytes
+				;----------------------------------------------------------------
+ 00000090			ReadFilex PROC USES ebx eax ecx edx
+
+						; point to file
+ 00000090  53		   *	    push   ebx
+ 00000091  50		   *	    push   eax
+ 00000092  51		   *	    push   ecx
+ 00000093  52		   *	    push   edx
+ 00000094  A1 000000F8 R			mov eax, fileDir
+						
+						; pointer to data
+ 00000099  BA 00000967 R			mov edx, offset bssBuf 
+
+						; number of bytes to read
+ 0000009E  8B 0D 00000110 R			mov ecx, lengthR
+ 000000A4  E8 00000000 E			call ReadFromFile
+
+ 000000A9  78 08				js errorReading
+ 000000AB  3B 05 00000110 R			cmp eax, lengthR
+ 000000B1  7D 0F				jge reading_succeeded
+ 000000B3					errorReading:
+ 000000B3  BA 00000016 R				mov edx, OFFSET errorMsg2
+ 000000B8  E8 00000000 E				call WriteString
+ 000000BD  E8 00000000 E				call Crlf
+ 000000C2					reading_succeeded:
+							;mov lengthRead, eax
+					ret
+ 000000C2  5A		   *	    pop    edx
+ 000000C3  59		   *	    pop    ecx
+ 000000C4  58		   *	    pop    eax
+ 000000C5  5B		   *	    pop    ebx
+ 000000C6  C3		   *	    ret    00000h
+ 000000C7			ReadFilex ENDP
+
+				;----------------------------------------------------------------
+				;writes the data in bssBuff to the output file
+				; recieves: toWrite contains the number of bytes to be written
+				;----------------------------------------------------------------
+ 000000C7			WriteFilex PROC USES eax edx ecx
+ 000000C7  50		   *	    push   eax
+ 000000C8  52		   *	    push   edx
+ 000000C9  51		   *	    push   ecx
+ 000000CA  A1 0000010C R			mov eax, outputHandle
+ 000000CF  BA 00000967 R			mov edx, offset bssBuf
+ 000000D4  8B 0D 00000118 R			mov ecx, toWrite
+ 000000DA  E8 00000000 E			call WriteToFile
+ 000000DF  83 F8 00				cmp eax, 0
+ 000000E2  7E 02				jle errorWriting
+ 000000E4  EB 19				jmp written
+ 000000E6					errorWriting:
+ 000000E6  BA 0000002E R				mov edx, OFFSET errorMsg3
+ 000000EB  E8 00000000 E				call WriteString
+
+ 000000F0  E8 00000000 E				call Crlf
+ 000000F5  E8 00000000 E				call WriteInt
+ 000000FA  E8 00000000 E				call Crlf
+ 000000FF					written: 
+							
+						ret
+ 000000FF  59		   *	    pop    ecx
+ 00000100  5A		   *	    pop    edx
+ 00000101  58		   *	    pop    eax
+ 00000102  C3		   *	    ret    00000h
+ 00000103			WriteFilex ENDP
+
+				;----------------------------------------------------------------
+				;Closes the file recently opened
+				;----------------------------------------------------------------
+ 00000103			CloseFilex PROC USES eax ebx 
+						
+ 00000103  50		   *	    push   eax
+ 00000104  53		   *	    push   ebx
+ 00000105  A1 000000F8 R		mov eax, fileDir ; mov bx, fileDir
+ 0000010A  E8 00000000 E		call closeFile
+					ret
+ 0000010F  5B		   *	    pop    ebx
+ 00000110  58		   *	    pop    eax
+ 00000111  C3		   *	    ret    00000h
+ 00000112			CloseFilex ENDP
+
+				;----------------------------------------------------------------
+				;closes output file 
+				; necessary for unhiding in the same run session after hiding
+				;----------------------------------------------------------------
+ 00000112			CloseOutPutFile PROC USES eax ebx	
+ 00000112  50		   *	    push   eax
+ 00000113  53		   *	    push   ebx
+ 00000114  A1 0000010C R			mov eax, OutputHandle 
+ 00000119  E8 00000000 E			call closeFile
+					ret
+ 0000011E  5B		   *	    pop    ebx
+ 0000011F  58		   *	    pop    eax
+ 00000120  C3		   *	    ret    00000h
+ 00000121			CloseOutPutFile ENDP
+
+				;----------------------------------------------------------------
+				;Extracts the number from array of bytes 
+				;guaranted that all the bytes are number chars
+				; recieves: bssBuff and ptrForN which contains the index of 
+				;the beginnig char in bssBuff
+				;returns: eax contains the number exteracted
+				;----------------------------------------------------------------
+ 00000121			NumberExteractor PROC USES ebx edi edx
+ 00000121  53		   *	    push   ebx
+ 00000122  57		   *	    push   edi
+ 00000123  52		   *	    push   edx
+ 00000124  8B 3D 0000011C R			mov edi, ptrForN
+						;mov eax, ptrForN
+						;call writeInt
+						;call Crlf
+ 0000012A  B8 00000000				mov eax, 0
+						;mov edx, 10 ; for mul
+
+ 0000012F					Exter:
+ 0000012F  BA 0000000A					mov edx, 10 
+ 00000134  80 BF 00000967 R				cmp BYTE PTR [bssBuf + edi], 0Ah
+	   0A
+ 0000013B  74 28					je done
+ 0000013D  80 BF 00000967 R				cmp BYTE PTR [bssBuf + edi], 0
+	   00
+ 00000144  74 1F					je done
+ 00000146  80 BF 00000967 R				cmp BYTE PTR [bssBuf + edi], 13
+	   0D
+ 0000014D  74 15					je carriageReturn
+ 0000014F  F7 E2					mul edx
+ 00000151  BB 00000000					mov ebx, 0
+ 00000156  8A 9F 00000967 R				mov bl, [bssBuf + edi]
+ 0000015C  83 EB 30					sub ebx, '0'
+ 0000015F  03 C3					add eax, ebx
+ 00000161  47						inc edi
+ 00000162  EB CB					jmp Exter
+ 00000164					carriageReturn:
+ 00000164  47						inc edi
+ 00000165					done:
+ 00000165  47						inc edi
+							;inc edi
+ 00000166  89 3D 0000011C R				mov ptrForN, edi
+					ret
+ 0000016C  5A		   *	    pop    edx
+ 0000016D  5F		   *	    pop    edi
+ 0000016E  5B		   *	    pop    ebx
+ 0000016F  C3		   *	    ret    00000h
+ 00000170			NumberExteractor ENDP
+
+				;----------------------------------------------------------------
+				;Reads the first two lines from the file which indicated width and 
+				; recieves: ecx contains the offset of the msg (msg for hiding "msg" or from unhide "decmsg")
+				; returns: lengthRead which indicates the number of bytes to be read till the end of the file
+				;----------------------------------------------------------------
+ 00000170			ReadHeader PROC USES  eax edx ecx
+ 00000170  50		   *	    push   eax
+ 00000171  52		   *	    push   edx
+ 00000172  51		   *	    push   ecx
+ 00000173  C8 0000 00			Enter 0, 0
+ 00000177  60				pushad
+ 00000178  C7 05 00000110 R		mov lengthR, 12
+	   0000000C
+ 00000182  E8 FFFFFF09			call ReadFilex
+					;mov eax,0
+					;inc ptrForN
+ 00000187  E8 FFFFFF95			call NumberExteractor
+ 0000018C  A3 00000120 R		mov tmpVar1, eax
+					
+					;call WriteInt
+					;call Crlf
+						
+ 00000191  B8 00000000			mov eax, 0
+ 00000196  E8 FFFFFF86			call NumberExteractor
+ 0000019B  A3 00000124 R		mov tmpVar2, eax
+						
+					;call WriteInt
+					;call Crlf
+						
+ 000001A0  8B 1D 00000120 R		mov ebx, [tmpVar1]
+ 000001A6  F7 E3			mul ebx
+ 000001A8  8B C8			mov ecx, eax
+ 000001AA  83 E9 02			sub ecx, 2
+						
+					;call WriteInt
+					;call Crlf
+
+ 000001AD  BB 0000000F			mov ebx, 15
+ 000001B2  F7 E3			mul ebx
+ 000001B4  48				dec eax
+					;add eax, ecx
+						
+ 000001B5  A3 00000114 R		mov lengthRead, eax ; size of the whole file
+					;call WriteInt
+					;call Crlf
+ 000001BA  61				popad
+ 000001BB  C9				leave
+					ret
+ 000001BC  59		   *	    pop    ecx
+ 000001BD  5A		   *	    pop    edx
+ 000001BE  58		   *	    pop    eax
+ 000001BF  C3		   *	    ret    00000h
+ 000001C0			ReadHeader ENDP 
+
+				;----------------------------------------------------------------
+				;writes the read header to the output file
+				; the header must be present in bssBuff in order for the proc
+				; to function properly
+				;----------------------------------------------------------------
+
+ 000001C0			WriteHeaderToOutput PROC USES eax edx ecx
+ 000001C0  50		   *	    push   eax
+ 000001C1  52		   *	    push   edx
+ 000001C2  51		   *	    push   ecx
+ 000001C3  A1 0000010C R			mov eax, outputHandle
+ 000001C8  BA 00000967 R			mov edx, offset bssBuf
+ 000001CD  B9 0000000C				mov ecx, 12
+ 000001D2  E8 00000000 E			call WriteToFile
+						ret
+ 000001D7  59		   *	    pop    ecx
+ 000001D8  5A		   *	    pop    edx
+ 000001D9  58		   *	    pop    eax
+ 000001DA  C3		   *	    ret    00000h
+ 000001DB			WriteHeaderToOutput ENDP
+
+				;----------------------------------------------------------------
+				;For debugging purpose moves the file pointer after the header
+				;----------------------------------------------------------------
+ 000001DB			EscapeHeader PROC USES  eax edx ecx
+ 000001DB  50		   *	    push   eax
+ 000001DC  52		   *	    push   edx
+ 000001DD  51		   *	    push   ecx
+ 000001DE  C7 05 00000110 R			mov lengthR, 12
+	   0000000C
+ 000001E8  E8 FFFFFEA3				call ReadFilex
+						ret
+ 000001ED  59		   *	    pop    ecx
+ 000001EE  5A		   *	    pop    edx
+ 000001EF  58		   *	    pop    eax
+ 000001F0  C3		   *	    ret    00000h
+ 000001F1			EscapeHeader ENDP
+
+				;----------------------------------------------------------------
+				;Reads the whole file and store it in bssBuff
+				;----------------------------------------------------------------
+ 000001F1			ReadWhole PROC USES eax
+ 000001F1  50		   *	    push   eax
+ 000001F2  C8 0000 00			Enter 0, 0
+ 000001F6  60				pushad
+ 000001F7  A1 00000114 R			mov eax, lengthRead
+ 000001FC  A3 00000110 R			mov lengthR, eax
+ 00000201  E8 FFFFFE8A				call ReadFilex
+ 00000206  61				popad
+ 00000207  C9				leave
+					ret
+ 00000208  58		   *	    pop    eax
+ 00000209  C3		   *	    ret    00000h
+ 0000020A			ReadWhole ENDP
+
+				;----------------------------------------------------------------
+				; Gets the msg from the user to be hidden
+				; if encryption is performed an additional 8 bit key is provided
+				;----------------------------------------------------------------
+ 0000020A			GetMsgKey PROC USES edx eax ecx
+ 0000020A  52		   *	    push   edx
+ 0000020B  50		   *	    push   eax
+ 0000020C  51		   *	    push   ecx
+ 0000020D  C8 0000 00			Enter 0, 0
+ 00000211  60				pushad
+					
+ 00000212  8B 75 04			mov esi, [ebp + 4]
+ 00000215  BF 00000197 R		mov edi, offset msg
+ 0000021A  4F				dec edi
+ 0000021B  BB 00000000			mov ebx, 0
+
+ 00000220				LCOPY:
+ 00000220  47					inc edi
+ 00000221  8A 06				mov al, [esi]
+ 00000223  88 07				mov [edi], al
+ 00000225  46					inc esi
+ 00000226  43					inc ebx
+ 00000227  80 3F 00				cmp BYTE PTR[edi], 0
+ 0000022A  75 F4			Jne LCOPY
+ 0000022C  89 1D 00000128 R		mov msgLen, ebx
+
+ 00000232  B8 00000000			mov eax, 0
+ 00000237  8A 06			mov al, [esi]
+ 00000239  A2 0000012D R		mov key, al
+					
+ 0000023E  61				popad
+ 0000023F  C9				leave
+					ret
+ 00000240  59		   *	    pop    ecx
+ 00000241  58		   *	    pop    eax
+ 00000242  5A		   *	    pop    edx
+ 00000243  C3		   *	    ret    00000h
+ 00000244			GetMsgKey ENDP
+
+				;----------------------------------------------------------------
+				;Gets the msg from the user to be hidden
+				;----------------------------------------------------------------
+
+ 00000244			GetMsg PROC USES edx eax ecx
+ 00000244  52		   *	    push   edx
+ 00000245  50		   *	    push   eax
+ 00000246  51		   *	    push   ecx
+ 00000247  C8 0000 00			enter 0, 0
+ 0000024B  60				pushad
+					
+ 0000024C  8B 75 04			mov esi, [ebp + 4]
+ 0000024F  BF 00000197 R		mov edi, offset msg
+ 00000254  4F				dec edi
+ 00000255  BB 00000000			mov ebx, 0
+
+ 0000025A				LCOPY:
+ 0000025A  47					inc edi
+ 0000025B  8A 06				mov al, [esi]
+ 0000025D  88 07				mov [edi], al
+ 0000025F  46					inc esi
+ 00000260  43					inc ebx
+ 00000261  80 3F 00				cmp BYTE PTR[edi], 0
+ 00000264  75 F4			Jne LCOPY
+ 00000266  89 1D 00000128 R		mov msgLen, ebx	
+					
+ 0000026C  61				popad
+ 0000026D  C9				leave
+					ret
+ 0000026E  59		   *	    pop    ecx
+ 0000026F  58		   *	    pop    eax
+ 00000270  5A		   *	    pop    edx
+ 00000271  C3		   *	    ret    00000h
+ 00000272			GetMsg ENDP
+
+				;----------------------------------------------------------------
+				;if an encryption is to be preformed this function gets the 8 bits key
+				;----------------------------------------------------------------
+
+ 00000272			getKey PROC USES edx eax ecx
+ 00000272  52		   *	    push   edx
+ 00000273  50		   *	    push   eax
+ 00000274  51		   *	    push   ecx
+ 00000275  C8 0000 00			enter 0, 0
+ 00000279  60				pushad
+					
+ 0000027A  8B 75 04			mov esi, [ebp + 4]
+ 0000027D  B8 00000000			mov eax, 0
+ 00000282  8A 06			mov al, [esi]
+ 00000284  A2 0000012D R		mov key, al
+					
+ 00000289  61				popad
+ 0000028A  C9				leave
+					ret
+ 0000028B  59		   *	    pop    ecx
+ 0000028C  58		   *	    pop    eax
+ 0000028D  5A		   *	    pop    edx
+ 0000028E  C3		   *	    ret    00000h
+ 0000028F			getKey ENDP
+
+				;----------------------------------------------------------------
+				;hides only one letter in 8 lines from the file
+				; recieves: currLetter
+				;----------------------------------------------------------------
+ 0000028F			EncryptLetter PROC USES eax ebx edi ecx
+ 0000028F  50		   *	    push   eax
+ 00000290  53		   *	    push   ebx
+ 00000291  57		   *	    push   edi
+ 00000292  51		   *	    push   ecx
+ 00000293  C7 05 0000011C R			mov ptrForN, 0
+	   00000000
+ 0000029D  A0 00000132 R			mov al, currLetter
+ 000002A2  B3 80				mov bl, 80h
+ 000002A4  8B 3D 0000011C R			mov edi, ptrForN
+ 000002AA  80 3D 0000012C R			cmp twoDigit, 1
+	   01
+ 000002B1  74 04				je only2
+ 000002B3  B1 00				mov cl, 00h
+ 000002B5  EB 02				jmp enc
+ 000002B7					only2:
+ 000002B7  B1 20					mov cl, 20h
+ 000002B9					enc:
+ 000002B9  3A D9					cmp bl, cl
+ 000002BB  74 2F					je doneEnc
+ 000002BD						EndofNum:
+ 000002BD  80 BF 00000967 R					cmp BYTE PTR [bssBuf + edi], 0Dh
+	   0D
+ 000002C4  74 0C						je EncCurrLetter
+ 000002C6  80 BF 00000967 R					cmp BYTE PTR [bssBuf + edi], 0
+	   00
+ 000002CD  74 1D						je EXITENC
+ 000002CF  47							inc edi
+ 000002D0  EB EB						jmp EndofNum
+ 000002D2							EncCurrLetter:
+ 000002D2  84 C3							test al, bl
+ 000002D4  74 09							jz zero
+									
+ 000002D6  80 8F 00000966 R						or BYTE PTR [bssBuf + edi - 1], 01h
+	   01
+ 000002DD  EB 07							jmp avoid
+ 000002DF								zero:
+ 000002DF  80 A7 00000966 R							and BYTE PTR [bssBuf + edi - 1], 0FEh
+	   FE
+ 000002E6								avoid:
+ 000002E6  F8									clc
+ 000002E7  D0 EB								shr bl, 1
+ 000002E9  47									inc edi
+ 000002EA  EB CD								jmp enc
+										
+ 000002EC					doneEnc:
+							
+ 000002EC					EXITENC:
+							;mov ptrForN, edi
+					ret
+ 000002EC  59		   *	    pop    ecx
+ 000002ED  5F		   *	    pop    edi
+ 000002EE  5B		   *	    pop    ebx
+ 000002EF  58		   *	    pop    eax
+ 000002F0  C3		   *	    ret    00000h
+ 000002F1			EncryptLetter ENDP
+
+				;----------------------------------------------------------------
+				;sets the two lowest bits to the 2 highest bits
+				; for hiding the length
+				; receives : al the number
+				; returns : al 
+				;----------------------------------------------------------------
+ 000002F1			setHighest2bits PROC 
+ 000002F1  A8 01				test al, 01h
+ 000002F3  74 04				jz zero1
+ 000002F5  0C 40				or al, 40h
+ 000002F7  EB 02				jmp secondBit
+ 000002F9					zero1:
+ 000002F9  24 AF					and al, 0AFh
+ 000002FB					secondBit:
+ 000002FB  A8 02					test al, 02h
+ 000002FD  74 04					jz zero2
+ 000002FF  0C 80					or al, 80h
+ 00000301  EB 02					jmp done
+ 00000303						zero2:
+ 00000303  24 7F						and al, 7Fh
+ 00000305					done:
+
+ 00000305  C3				ret
+ 00000306			setHighest2bits ENDP
+
+				;----------------------------------------------------------------
+				;hides the length in fist 10 lines then hides the rest of the msg
+				;writes the hiddin msg to outputfile using proc writeFilex
+				;writes the rest of the file with no hidden msg to outputfile
+				;----------------------------------------------------------------
+ 00000306			EncBuffer PROC USES edi ecx ebx edx
+						;mov ptrForN, 0
+						
+						; we need only 10 digits to encrypt msgLen
+						
+ 00000306  57		   *	    push   edi
+ 00000307  51		   *	    push   ecx
+ 00000308  53		   *	    push   ebx
+ 00000309  52		   *	    push   edx
+ 0000030A  A1 00000128 R				mov eax, msgLen
+							
+ 0000030F  BA 00000028					mov edx, 40
+ 00000314  89 15 00000110 R				mov lengthR, edx
+ 0000031A  E8 FFFFFD71					call ReadFilex
+ 0000031F  29 15 00000114 R				sub lengthRead, edx
+
+ 00000325  A2 00000132 R				mov currLetter, al
+ 0000032A  E8 FFFFFF60					call EncryptLetter
+ 0000032F  89 15 00000118 R				mov toWrite, edx
+ 00000335  E8 FFFFFD8D					call writeFilex
+ 0000033A  C6 05 0000012C R				mov twoDigit, 1
+	   01
+ 00000341  8A DC					mov bl, ah
+ 00000343  8A C3					mov al, bl
+ 00000345  E8 FFFFFFA7					call setHighest2Bits
+
+ 0000034A  BA 0000000A					mov edx, 10
+ 0000034F  89 15 00000110 R				mov lengthR, edx
+ 00000355  E8 FFFFFD36					call ReadFilex
+ 0000035A  29 15 00000114 R				sub lengthRead, edx
+
+ 00000360  A2 00000132 R				mov currLetter, al
+ 00000365  E8 FFFFFF25					call EncryptLetter
+ 0000036A  89 15 00000118 R				mov toWrite, edx
+ 00000370  E8 FFFFFD52					call writeFilex
+ 00000375  C6 05 0000012C R				mov twoDigit, 0
+	   00
+
+ 0000037C  BF 00000000				mov edi, 0
+ 00000381					LoopLetters:
+ 00000381  3B 3D 00000128 R				cmp edi, msgLen
+ 00000387  74 35					je endLoop
+ 00000389  8A 9F 00000197 R				mov bl, BYTE PTR [msg + edi]
+ 0000038F  88 1D 00000132 R				mov currLetter, bl
+
+ 00000395  BA 00000028					mov edx, 40
+ 0000039A  89 15 00000110 R				mov lengthR, edx
+ 000003A0  E8 FFFFFCEB					call ReadFilex
+ 000003A5  29 15 00000114 R				sub lengthRead, edx
+
+ 000003AB  E8 FFFFFEDF					call EncryptLetter
+ 000003B0  89 15 00000118 R				mov toWrite, edx
+ 000003B6  E8 FFFFFD0C					call writeFilex
+ 000003BB  47						inc edi
+ 000003BC  EB C3					jmp LoopLetters
+ 000003BE					endLoop:
+							
+ 000003BE  83 3D 00000114 R				cmp lengthRead, 0
+	   00
+ 000003C5  74 4E					je done
+ 000003C7  83 3D 00000114 R				cmp lengthRead, 40
+	   28
+ 000003CE  7C 23					jl lessWrite
+ 000003D0  BA 00000028						mov edx, 40
+ 000003D5  89 15 00000110 R					mov lengthR, edx
+ 000003DB  E8 FFFFFCB0						call ReadFilex
+ 000003E0  29 15 00000114 R					sub lengthRead, edx
+ 000003E6  89 15 00000118 R					mov toWrite, edx
+ 000003EC  E8 FFFFFCD6						call writeFilex
+ 000003F1  EB CB						jmp endLoop
+ 000003F3						lessWrite:
+ 000003F3  8B 15 00000114 R					mov edx, lengthRead
+ 000003F9  89 15 00000110 R					mov lengthR, edx
+ 000003FF  E8 FFFFFC8C						call ReadFilex
+ 00000404  29 15 00000114 R					sub lengthRead, edx
+ 0000040A  89 15 00000118 R					mov toWrite, edx
+ 00000410  E8 FFFFFCB2						call writeFilex
+ 00000415						done:
+
+					ret 
+ 00000415  5A		   *	    pop    edx
+ 00000416  5B		   *	    pop    ebx
+ 00000417  59		   *	    pop    ecx
+ 00000418  5F		   *	    pop    edi
+ 00000419  C3		   *	    ret    00000h
+ 0000041A			EncBuffer ENDP
+
+				;----------------------------------------------------------------
+				;retrieves a char from 8 lines or 2 lines in the case of second half of length
+				; returns: al contains the hidden char or length
+				;----------------------------------------------------------------
+ 0000041A			DecryptLetter PROC USES ebx edi ecx
+ 0000041A  53		   *	    push   ebx
+ 0000041B  57		   *	    push   edi
+ 0000041C  51		   *	    push   ecx
+ 0000041D  C7 05 0000011C R			mov ptrForN, 0
+	   00000000
+ 00000427  B0 00				mov al, 0
+						;call WriteChar
+						;call Crlf
+						;xor al, key
+ 00000429  8B 3D 0000011C R			mov edi, ptrForN
+ 0000042F  B3 80				mov bl, 80h
+ 00000431  80 3D 0000012C R			cmp twoDigit, 1
+	   01
+ 00000438  74 04				je only2
+ 0000043A  B1 00				mov cl, 00h
+ 0000043C  EB 02				jmp denc
+ 0000043E					only2:
+ 0000043E  B1 20					mov cl, 20h
+						
+						
+ 00000440					denc:
+ 00000440  3A D9					cmp bl, cl
+ 00000442  74 26					je doneEnc
+ 00000444						EndofNum:
+								;cmp BYTE PTR [bssBuf + edi], 0Ah
+								;je EncCurrLetter
+ 00000444  80 BF 00000967 R					cmp BYTE PTR [bssBuf + edi], 0Dh
+	   0D
+ 0000044B  74 0C						je EncCurrLetter
+ 0000044D  80 BF 00000967 R					cmp BYTE PTR [bssBuf + edi], 0
+	   00
+ 00000454  74 14						je EXITENC
+ 00000456  47							inc edi
+ 00000457  EB EB						jmp EndofNum
+ 00000459							EncCurrLetter:
+ 00000459  F6 87 00000966 R						test BYTE PTR [bssBuf + edi - 1], 01h
+	   01
+ 00000460  74 02							jz avoid
+ 00000462  0A C3							or al, bl
+ 00000464								avoid:
+ 00000464  F8									clc
+ 00000465  D0 EB								shr bl, 1
+ 00000467  47									inc edi
+ 00000468  EB D6								jmp denc
+										
+ 0000046A					doneEnc:
+							
+ 0000046A					EXITENC:
+ 0000046A  89 3D 0000011C R				mov ptrForN, edi
+					ret
+ 00000470  59		   *	    pop    ecx
+ 00000471  5F		   *	    pop    edi
+ 00000472  5B		   *	    pop    ebx
+ 00000473  C3		   *	    ret    00000h
+ 00000474			DecryptLetter ENDP
+
+				;----------------------------------------------------------------
+				;reverses proc setHighest2bits for getting the length correctly
+				; recieves : al
+				; returns : al
+				;----------------------------------------------------------------
+ 00000474			setLowest2bits PROC 
+ 00000474  A8 40				test al, 40h
+ 00000476  74 04				jz zero1
+ 00000478  0C 01				or al, 01h
+ 0000047A  EB 02				jmp secondBit
+ 0000047C					zero1:
+ 0000047C  24 FE					and al, 0FEh
+ 0000047E					secondBit:
+ 0000047E  A8 80					test al, 80h
+ 00000480  74 04					jz zero2
+ 00000482  0C 02					or al, 02h
+ 00000484  EB 02					jmp done
+ 00000486						zero2:
+ 00000486  24 FD						and al, 0FDh
+ 00000488					done:
+
+ 00000488  C3				ret
+ 00000489			setLowest2bits ENDP
+
+				;----------------------------------------------------------------
+				;retrieves the length of the msg
+				; then the hidden msg based on length
+				; returns: al
+				;----------------------------------------------------------------
+
+ 00000489			DecBuffer PROC USES edi ecx ebx edx
+ 00000489  57		   *	    push   edi
+ 0000048A  51		   *	    push   ecx
+ 0000048B  53		   *	    push   ebx
+ 0000048C  52		   *	    push   edx
+ 0000048D  C7 05 0000011C R			mov ptrForN, 0
+	   00000000
+						;mov ecx, msgLen
+
+ 00000497					EncMsgLen:
+							;mov eax, msgLen
+ 00000497  BA 00000028					mov edx, 40
+ 0000049C  89 15 00000110 R				mov lengthR, edx
+ 000004A2  E8 FFFFFBE9					call ReadFilex
+
+ 000004A7  C6 05 0000012C R				mov twoDigit, 0
+	   00
+ 000004AE  B8 00000000					mov eax, 0
+ 000004B3  E8 FFFFFF62					call decryptLetter
+
+ 000004B8  BA 0000000A					mov edx, 10
+ 000004BD  89 15 00000110 R				mov lengthR, edx
+ 000004C3  E8 FFFFFBC8					call ReadFilex
+
+ 000004C8  A3 00000128 R				mov msgLen, eax
+						
+ 000004CD  C6 05 0000012C R				mov twoDigit, 1
+	   01
+ 000004D4  E8 FFFFFF41					call decryptLetter
+ 000004D9  E8 FFFFFF96					call setLowest2bits
+
+ 000004DE  8A D8					mov bl, al
+ 000004E0  A0 00000128 R				mov al, BYTE PTR [msgLen]
+ 000004E5  8A E3					mov ah, bl
+ 000004E7  A3 00000128 R				mov msgLen, eax
+ 000004EC  C6 05 0000012C R				mov twoDigit, 0
+	   00
+
+ 000004F3  BF 00000000				mov edi, 0
+ 000004F8					LoopLetters:
+ 000004F8  3B 3D 00000128 R				cmp edi, msgLen
+ 000004FE  74 1E					je endLoop
+							
+ 00000500  BA 00000028					mov edx, 40
+ 00000505  89 15 00000110 R				mov lengthR, edx
+ 0000050B  E8 FFFFFB80					call ReadFilex
+
+ 00000510  E8 FFFFFF05					call decryptLetter
+							;add al, '0'
+ 00000515  88 87 0000057F R				mov BYTE PTR [decMsg + edi], al
+							
+ 0000051B  47						inc edi
+ 0000051C  EB DA					jmp LoopLetters
+ 0000051E					endLoop:
+
+					ret 
+ 0000051E  5A		   *	    pop    edx
+ 0000051F  5B		   *	    pop    ebx
+ 00000520  59		   *	    pop    ecx
+ 00000521  5F		   *	    pop    edi
+ 00000522  C3		   *	    ret    00000h
+ 00000523			DecBuffer ENDP
+
+
+				;----------------------------------------------------------------
+				; Moves decMsg to Ecx to be used in EncryptMsg proc
+				;----------------------------------------------------------------
+ 00000523			MovDecMsgToEcx PROC
+					;enter 0, 0
+ 00000523  B9 0000057F R		mov ecx, offset decMsg
+ 00000528  E8 0000000C			call EncryptMsg
+					;leave
+ 0000052D  C3				ret
+ 0000052E			MovDecMsgToEcx ENDP
+
+				;----------------------------------------------------------------
+				; Moves Msg to Ecx to be used in EncryptMsg proc
+				;----------------------------------------------------------------
+ 0000052E			MovMsgToEcx PROC
+					;enter 0, 0
+ 0000052E  B9 00000197 R		mov ecx, offset msg
+ 00000533  E8 00000001			call EncryptMsg
+					;leave
+ 00000538  C3				ret
+ 00000539			MovMsgToEcx ENDP
+
+				;----------------------------------------------------------------
+				;Performs encryption or decryption on the msg by xoring with a key (8 bits)
+				; recieves: ecx contains the offset of the msg (msg for hiding or from unhide)
+				;----------------------------------------------------------------
+ 00000539			EncryptMsg PROC USES edi ebx eax
+ 00000539  57		   *	    push   edi
+ 0000053A  53		   *	    push   ebx
+ 0000053B  50		   *	    push   eax
+ 0000053C  8A 1D 0000012D R			mov bl, key
+ 00000542  BF 00000000				mov edi, 0
+ 00000547					LoopLetters:
+ 00000547  3B 3D 00000128 R				cmp edi, msgLen
+ 0000054D  74 06					je endLoop
+ 0000054F  30 1C 0F					xor BYTE PTR [ecx + edi], bl
+ 00000552  47						inc edi
+ 00000553  EB F2					jmp LoopLetters
+ 00000555					endLoop:
+					ret 
+ 00000555  58		   *	    pop    eax
+ 00000556  5B		   *	    pop    ebx
+ 00000557  5F		   *	    pop    edi
+ 00000558  C3		   *	    ret    00000h
+ 00000559			EncryptMsg ENDP
+
+				;----------------------------------------------------------------
+				;Asks the user wether to perform encryption or not
+				; recieves: ecx contains the offset of the msg (msg for hiding "msg" or from unhide "decmsg")
+				;----------------------------------------------------------------
+
+ 00000559			EncryptOrNot PROC 
+ 00000559  BA 000000D4 R				mov edx, offset msg5
+ 0000055E  E8 00000000 E				call WriteString
+ 00000563  E8 00000000 E				call Crlf
+
+ 00000568  E8 00000000 E				call ReadInt
+ 0000056D  A2 000000F3 R				mov programChoice, al
+ 00000572  80 3D 000000F3 R				cmp programChoice, 0
+	   00
+ 00000579  74 02					je encryptMsgx
+ 0000057B  EB 0A					jmp avoid
+ 0000057D							encryptMsgx:
+ 0000057D  E8 FFFFFCF0							call getKey
+ 00000582  E8 FFFFFFB2							call EncryptMsg
+ 00000587							avoid:
+ 00000587  C3				ret
+ 00000588			EncryptOrNot ENDP
+
+				;----------------------------------------------------------------
+				;prints the contents of bssBuff array
+				; for debugging purpose
+				;----------------------------------------------------------------		
+ 00000588			PrintPointer PROC USES edx ecx
+ 00000588  52		   *	    push   edx
+ 00000589  51		   *	    push   ecx
+ 0000058A  BA 00000967 R			mov edx, OFFSET bssBuf
+ 0000058F  8B 0D 00000114 R			mov ecx, lengthRead
+ 00000595  E8 00000000 E			call WriteString
+ 0000059A  E8 00000000 E			call Crlf
+					ret
+ 0000059F  59		   *	    pop    ecx
+ 000005A0  5A		   *	    pop    edx
+ 000005A1  C3		   *	    ret    00000h
+ 000005A2			PrintPointer ENDP
+
+				;----------------------------------------------------------------
+				;Copies Decrypted Message from assembly level to Host Application
+				;Recieves: ebp + 4 -> offset to byte array in Host Application to
+				;					  write Message
+				;----------------------------------------------------------------
+ 000005A2			PrintDecMsg PROC USES edx ecx
+ 000005A2  52		   *	    push   edx
+ 000005A3  51		   *	    push   ecx
+ 000005A4  C8 0000 00			enter 0, 0
+ 000005A8  60				pushad
+					
+ 000005A9  BE 0000057F R		mov esi, offset decMsg
+ 000005AE  8B 7D 04			mov edi, [ebp + 4]
+ 000005B1  8B 0D 00000128 R		mov ecx, msgLen
+ 000005B7  F3/ A4			rep movsb
+
+ 000005B9  61				popad
+ 000005BA  C9				leave
+					ret
+ 000005BB  59		   *	    pop    ecx
+ 000005BC  5A		   *	    pop    edx
+ 000005BD  C3		   *	    ret    00000h
+ 000005BE			PrintDecMsg ENDP
+
+				end LibMain
+Microsoft (R) Macro Assembler Version 14.00.24210.0	    12/28/16 03:54:26
+AddTwo.asm						     Symbols 2 - 1
+
+
+
+
+Structures and Unions:
+
+                N a m e                  Size
+                                         Offset      Type
+
+CONSOLE_CURSOR_INFO  . . . . . .	 00000008
+  dwSize . . . . . . . . . . . .	 00000000	 DWord
+  bVisible . . . . . . . . . . .	 00000004	 DWord
+CONSOLE_SCREEN_BUFFER_INFO . . .	 00000016
+  dwSize . . . . . . . . . . . .	 00000000	 DWord
+  dwCursorPosition . . . . . . .	 00000004	 DWord
+  wAttributes  . . . . . . . . .	 00000008	 Word
+  srWindow . . . . . . . . . . .	 0000000A	 QWord
+  dwMaximumWindowSize  . . . . .	 00000012	 DWord
+COORD  . . . . . . . . . . . . .	 00000004
+  X  . . . . . . . . . . . . . .	 00000000	 Word
+  Y  . . . . . . . . . . . . . .	 00000002	 Word
+FILETIME . . . . . . . . . . . .	 00000008
+  loDateTime . . . . . . . . . .	 00000000	 DWord
+  hiDateTime . . . . . . . . . .	 00000004	 DWord
+FOCUS_EVENT_RECORD . . . . . . .	 00000004
+  bSetFocus  . . . . . . . . . .	 00000000	 DWord
+FPU_ENVIRON  . . . . . . . . . .	 0000001C
+  controlWord  . . . . . . . . .	 00000000	 Word
+  statusWord . . . . . . . . . .	 00000004	 Word
+  tagWord  . . . . . . . . . . .	 00000008	 Word
+  instrPointerOffset . . . . . .	 0000000C	 DWord
+  instrPointerSelector . . . . .	 00000010	 DWord
+  operandPointerOffset . . . . .	 00000014	 DWord
+  operandPointerSelector . . . .	 00000018	 Word
+INPUT_RECORD . . . . . . . . . .	 00000014
+  EventType  . . . . . . . . . .	 00000000	 Word
+  Event  . . . . . . . . . . . .	 00000004	 XmmWord
+  bKeyDown . . . . . . . . . . .	 00000000	 DWord
+  wRepeatCount . . . . . . . . .	 00000004	 Word
+  wVirtualKeyCode  . . . . . . .	 00000006	 Word
+  wVirtualScanCode . . . . . . .	 00000008	 Word
+  uChar  . . . . . . . . . . . .	 0000000A	 Word
+  UnicodeChar  . . . . . . . . .	 00000000	 Word
+  AsciiChar  . . . . . . . . . .	 00000000	 Byte
+  dwControlKeyState  . . . . . .	 0000000C	 DWord
+  dwMousePosition  . . . . . . .	 00000000	 DWord
+  dwButtonState  . . . . . . . .	 00000004	 DWord
+  dwMouseControlKeyState . . . .	 00000008	 DWord
+  dwEventFlags . . . . . . . . .	 0000000C	 DWord
+  dwSize . . . . . . . . . . . .	 00000000	 DWord
+  dwCommandId  . . . . . . . . .	 00000000	 DWord
+  bSetFocus  . . . . . . . . . .	 00000000	 DWord
+KEY_EVENT_RECORD . . . . . . . .	 00000010
+  bKeyDown . . . . . . . . . . .	 00000000	 DWord
+  wRepeatCount . . . . . . . . .	 00000004	 Word
+  wVirtualKeyCode  . . . . . . .	 00000006	 Word
+  wVirtualScanCode . . . . . . .	 00000008	 Word
+  uChar  . . . . . . . . . . . .	 0000000A	 Word
+  UnicodeChar  . . . . . . . . .	 00000000	 Word
+  AsciiChar  . . . . . . . . . .	 00000000	 Byte
+  dwControlKeyState  . . . . . .	 0000000C	 DWord
+MENU_EVENT_RECORD  . . . . . . .	 00000004
+  dwCommandId  . . . . . . . . .	 00000000	 DWord
+MOUSE_EVENT_RECORD . . . . . . .	 00000010
+  dwMousePosition  . . . . . . .	 00000000	 DWord
+  dwButtonState  . . . . . . . .	 00000004	 DWord
+  dwMouseControlKeyState . . . .	 00000008	 DWord
+  dwEventFlags . . . . . . . . .	 0000000C	 DWord
+SMALL_RECT . . . . . . . . . . .	 00000008
+  Left . . . . . . . . . . . . .	 00000000	 Word
+  Top  . . . . . . . . . . . . .	 00000002	 Word
+  Right  . . . . . . . . . . . .	 00000004	 Word
+  Bottom . . . . . . . . . . . .	 00000006	 Word
+SYSTEMTIME . . . . . . . . . . .	 00000010
+  wYear  . . . . . . . . . . . .	 00000000	 Word
+  wMonth . . . . . . . . . . . .	 00000002	 Word
+  wDayOfWeek . . . . . . . . . .	 00000004	 Word
+  wDay . . . . . . . . . . . . .	 00000006	 Word
+  wHour  . . . . . . . . . . . .	 00000008	 Word
+  wMinute  . . . . . . . . . . .	 0000000A	 Word
+  wSecond  . . . . . . . . . . .	 0000000C	 Word
+  wMilliseconds  . . . . . . . .	 0000000E	 Word
+WINDOW_BUFFER_SIZE_RECORD  . . .	 00000004
+  dwSize . . . . . . . . . . . .	 00000000	 DWord
+
+
+Segments and Groups:
+
+                N a m e                 Size     Length   Align   Combine Class
+
+FLAT . . . . . . . . . . . . . .	GROUP
+STACK  . . . . . . . . . . . . .	32 Bit	 00001000 Para	  Stack	  'STACK'	 
+_DATA  . . . . . . . . . . . . .	32 Bit	 0000098F Para	  Public  'DATA'	
+_TEXT  . . . . . . . . . . . . .	32 Bit	 000005BE Para	  Public  'CODE'	
+
+
+Procedures, parameters, and locals:
+
+                N a m e                 Type     Value    Attr
+
+CloseFilex . . . . . . . . . . .	P Near	 00000103 _TEXT	Length= 0000000F Public STDCALL
+CloseFile  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+CloseHandle  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+CloseOutPutFile  . . . . . . . .	P Near	 00000112 _TEXT	Length= 0000000F Public STDCALL
+Clrscr . . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+CreateFileA  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+CreateOutputFile . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+Crlf . . . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+DecBuffer  . . . . . . . . . . .	P Near	 00000489 _TEXT	Length= 0000009A Public STDCALL
+  EncMsgLen  . . . . . . . . . .	L Near	 00000497 _TEXT	
+  LoopLetters  . . . . . . . . .	L Near	 000004F8 _TEXT	
+  endLoop  . . . . . . . . . . .	L Near	 0000051E _TEXT	
+DecryptLetter  . . . . . . . . .	P Near	 0000041A _TEXT	Length= 0000005A Public STDCALL
+  only2  . . . . . . . . . . . .	L Near	 0000043E _TEXT	
+  denc . . . . . . . . . . . . .	L Near	 00000440 _TEXT	
+  EndofNum . . . . . . . . . . .	L Near	 00000444 _TEXT	
+  EncCurrLetter  . . . . . . . .	L Near	 00000459 _TEXT	
+  avoid  . . . . . . . . . . . .	L Near	 00000464 _TEXT	
+  doneEnc  . . . . . . . . . . .	L Near	 0000046A _TEXT	
+  EXITENC  . . . . . . . . . . .	L Near	 0000046A _TEXT	
+Delay  . . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+DumpMem  . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+DumpRegs . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+EncBuffer  . . . . . . . . . . .	P Near	 00000306 _TEXT	Length= 00000114 Public STDCALL
+  LoopLetters  . . . . . . . . .	L Near	 00000381 _TEXT	
+  endLoop  . . . . . . . . . . .	L Near	 000003BE _TEXT	
+  lessWrite  . . . . . . . . . .	L Near	 000003F3 _TEXT	
+  done . . . . . . . . . . . . .	L Near	 00000415 _TEXT	
+EncryptLetter  . . . . . . . . .	P Near	 0000028F _TEXT	Length= 00000062 Public STDCALL
+  only2  . . . . . . . . . . . .	L Near	 000002B7 _TEXT	
+  enc  . . . . . . . . . . . . .	L Near	 000002B9 _TEXT	
+  EndofNum . . . . . . . . . . .	L Near	 000002BD _TEXT	
+  EncCurrLetter  . . . . . . . .	L Near	 000002D2 _TEXT	
+  zero . . . . . . . . . . . . .	L Near	 000002DF _TEXT	
+  avoid  . . . . . . . . . . . .	L Near	 000002E6 _TEXT	
+  doneEnc  . . . . . . . . . . .	L Near	 000002EC _TEXT	
+  EXITENC  . . . . . . . . . . .	L Near	 000002EC _TEXT	
+EncryptMsg . . . . . . . . . . .	P Near	 00000539 _TEXT	Length= 00000020 Public STDCALL
+  LoopLetters  . . . . . . . . .	L Near	 00000547 _TEXT	
+  endLoop  . . . . . . . . . . .	L Near	 00000555 _TEXT	
+EncryptOrNot . . . . . . . . . .	P Near	 00000559 _TEXT	Length= 0000002F Public STDCALL
+  encryptMsgx  . . . . . . . . .	L Near	 0000057D _TEXT	
+  avoid  . . . . . . . . . . . .	L Near	 00000587 _TEXT	
+EscapeHeader . . . . . . . . . .	P Near	 000001DB _TEXT	Length= 00000016 Public STDCALL
+ExitProcess  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+FileTimeToDosDateTime  . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+FileTimeToSystemTime . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+FlushConsoleInputBuffer  . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+FormatMessageA . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetCommandLineA  . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetCommandTail . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetConsoleCP . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetConsoleCursorInfo . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetConsoleMode . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetConsoleScreenBufferInfo . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetDateTime  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetFileTime  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetKeyState  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetLastError . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetLocalTime . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetMaxXY . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetMseconds  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetMsgKey  . . . . . . . . . . .	P Near	 0000020A _TEXT	Length= 0000003A Public STDCALL
+  LCOPY  . . . . . . . . . . . .	L Near	 00000220 _TEXT	
+GetMsg . . . . . . . . . . . . .	P Near	 00000244 _TEXT	Length= 0000002E Public STDCALL
+  LCOPY  . . . . . . . . . . . .	L Near	 0000025A _TEXT	
+GetName  . . . . . . . . . . . .	P Near	 0000000C _TEXT	Length= 00000022 Public STDCALL
+  LCOPY  . . . . . . . . . . . .	L Near	 0000001D _TEXT	
+GetNumberOfConsoleInputEvents  .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetProcessHeap . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetStdHandle . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetSystemTime  . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetTextColor . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetTickCount . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+Gotoxy . . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+HeapAlloc  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+HeapCreate . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+HeapDestroy  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+HeapFree . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+HeapSize . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+IsDigit  . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+LibMain  . . . . . . . . . . . .	P Near	 00000000 _TEXT	Length= 0000000C Public STDCALL
+  instance . . . . . . . . . . .	DWord	 bp + 00000008
+  reason . . . . . . . . . . . .	DWord	 bp + 0000000C
+  unused . . . . . . . . . . . .	DWord	 bp + 00000010
+LocalFree  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+MessageBoxA  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+MovDecMsgToEcx . . . . . . . . .	P Near	 00000523 _TEXT	Length= 0000000B Public STDCALL
+MovMsgToEcx  . . . . . . . . . .	P Near	 0000052E _TEXT	Length= 0000000B Public STDCALL
+MsgBoxAsk  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+MsgBox . . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+NumberExteractor . . . . . . . .	P Near	 00000121 _TEXT	Length= 0000004F Public STDCALL
+  Exter  . . . . . . . . . . . .	L Near	 0000012F _TEXT	
+  carriageReturn . . . . . . . .	L Near	 00000164 _TEXT	
+  done . . . . . . . . . . . . .	L Near	 00000165 _TEXT	
+OpenFile . . . . . . . . . . . .	P Near	 00000040 _TEXT	Length= 00000026 Public STDCALL
+  errorOpen  . . . . . . . . . .	L Near	 00000058 _TEXT	
+  open_succeeded . . . . . . . .	L Near	 0000005A _TEXT	
+  doneOpen . . . . . . . . . . .	L Near	 0000005F _TEXT	
+OpenInputFile  . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ParseDecimal32 . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ParseInteger32 . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+PeekConsoleInputA  . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+PrintDecMsg  . . . . . . . . . .	P Near	 000005A2 _TEXT	Length= 0000001C Public STDCALL
+PrintName  . . . . . . . . . . .	P Near	 0000002E _TEXT	Length= 00000012 Public STDCALL
+PrintPointer . . . . . . . . . .	P Near	 00000588 _TEXT	Length= 0000001A Public STDCALL
+Random32 . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+RandomRange  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+Randomize  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadChar . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadConsoleA . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadConsoleInputA  . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadDec  . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadFilex  . . . . . . . . . . .	P Near	 00000090 _TEXT	Length= 00000037 Public STDCALL
+  errorReading . . . . . . . . .	L Near	 000000B3 _TEXT	
+  reading_succeeded  . . . . . .	L Near	 000000C2 _TEXT	
+ReadFile . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadFloat  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadFromFile . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadHeader . . . . . . . . . . .	P Near	 00000170 _TEXT	Length= 00000050 Public STDCALL
+ReadHex  . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadInt  . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadKeyFlush . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadKey  . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadString . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadWhole  . . . . . . . . . . .	P Near	 000001F1 _TEXT	Length= 00000019 Public STDCALL
+SetConsoleCursorInfo . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+SetConsoleCursorPosition . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+SetConsoleMode . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+SetConsoleScreenBufferSize . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+SetConsoleTextAttribute  . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+SetConsoleTitleA . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+SetConsoleWindowInfo . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+SetFilePointer . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+SetLocalTime . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+SetTextColor . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ShowFPUStack . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+Sleep  . . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+StrLength  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+Str_compare  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+Str_copy . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+Str_length . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+Str_trim . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+Str_ucase  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+SystemTimeToFileTime . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WaitMsg  . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteBinB  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteBin . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteChar  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteConsoleA  . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteConsoleOutputAttribute  . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteConsoleOutputCharacterA . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteDec . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteFilex . . . . . . . . . . .	P Near	 000000C7 _TEXT	Length= 0000003C Public STDCALL
+  errorWriting . . . . . . . . .	L Near	 000000E6 _TEXT	
+  written  . . . . . . . . . . .	L Near	 000000FF _TEXT	
+WriteFile  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteFloat . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteHeaderToOutput  . . . . . .	P Near	 000001C0 _TEXT	Length= 0000001B Public STDCALL
+WriteHexB  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteHex . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteInt . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteStackFrameName  . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteStackFrame  . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteString  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteToFile  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteWindowsMsg  . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+getKey . . . . . . . . . . . . .	P Near	 00000272 _TEXT	Length= 0000001D Public STDCALL
+outPutFileCreation . . . . . . .	P Near	 00000066 _TEXT	Length= 0000002A Public STDCALL
+  errorCreation  . . . . . . . .	L Near	 00000077 _TEXT	
+  creation_succeeded . . . . . .	L Near	 00000088 _TEXT	
+  doneCreation . . . . . . . . .	L Near	 0000008D _TEXT	
+printf . . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External C
+scanf  . . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External C
+setHighest2bits  . . . . . . . .	P Near	 000002F1 _TEXT	Length= 00000015 Public STDCALL
+  zero1  . . . . . . . . . . . .	L Near	 000002F9 _TEXT	
+  secondBit  . . . . . . . . . .	L Near	 000002FB _TEXT	
+  zero2  . . . . . . . . . . . .	L Near	 00000303 _TEXT	
+  done . . . . . . . . . . . . .	L Near	 00000305 _TEXT	
+setLowest2bits . . . . . . . . .	P Near	 00000474 _TEXT	Length= 00000015 Public STDCALL
+  zero1  . . . . . . . . . . . .	L Near	 0000047C _TEXT	
+  secondBit  . . . . . . . . . .	L Near	 0000047E _TEXT	
+  zero2  . . . . . . . . . . . .	L Near	 00000486 _TEXT	
+  done . . . . . . . . . . . . .	L Near	 00000488 _TEXT	
+wsprintfA  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External C
+
+
+Symbols:
+
+                N a m e                 Type     Value    Attr
+
+@CodeSize  . . . . . . . . . . .	Number	 00000000h   
+@DataSize  . . . . . . . . . . .	Number	 00000000h   
+@Interface . . . . . . . . . . .	Number	 00000003h   
+@Model . . . . . . . . . . . . .	Number	 00000007h   
+@code  . . . . . . . . . . . . .	Text   	 _TEXT
+@data  . . . . . . . . . . . . .	Text   	 FLAT
+@fardata?  . . . . . . . . . . .	Text   	 FLAT
+@fardata . . . . . . . . . . . .	Text   	 FLAT
+@stack . . . . . . . . . . . . .	Text   	 FLAT
+ALT_MASK . . . . . . . . . . . .	Number	 00000003h   
+CAPSLOCK_ON  . . . . . . . . . .	Number	 00000080h   
+CREATE_ALWAYS  . . . . . . . . .	Number	 00000002h   
+CREATE_NEW . . . . . . . . . . .	Number	 00000001h   
+CTRL_MASK  . . . . . . . . . . .	Number	 0000000Ch   
+CreateFile . . . . . . . . . . .	Text   	 CreateFileA
+DO_NOT_SHARE . . . . . . . . . .	Number	 00000000h   
+ENABLE_ECHO_INPUT  . . . . . . .	Number	 00000004h   
+ENABLE_LINE_INPUT  . . . . . . .	Number	 00000002h   
+ENABLE_MOUSE_INPUT . . . . . . .	Number	 00000010h   
+ENABLE_PROCESSED_INPUT . . . . .	Number	 00000001h   
+ENABLE_PROCESSED_OUTPUT  . . . .	Number	 00000001h   
+ENABLE_WINDOW_INPUT  . . . . . .	Number	 00000008h   
+ENABLE_WRAP_AT_EOL_OUTPUT  . . .	Number	 00000002h   
+ENHANCED_KEY . . . . . . . . . .	Number	 00000100h   
+FALSE  . . . . . . . . . . . . .	Number	 00000000h   
+FILE_APPEND_DATA . . . . . . . .	Number	 00000004h   
+FILE_ATTRIBUTE_ARCHIVE . . . . .	Number	 00000020h   
+FILE_ATTRIBUTE_COMPRESSED  . . .	Number	 00000800h   
+FILE_ATTRIBUTE_DEVICE  . . . . .	Number	 00000040h   
+FILE_ATTRIBUTE_DIRECTORY . . . .	Number	 00000010h   
+FILE_ATTRIBUTE_ENCRYPTED . . . .	Number	 00004000h   
+FILE_ATTRIBUTE_HIDDEN  . . . . .	Number	 00000002h   
+FILE_ATTRIBUTE_NORMAL  . . . . .	Number	 00000080h   
+FILE_ATTRIBUTE_NOT_CONTENT_INDEXED .	Number	 00002000h   
+FILE_ATTRIBUTE_OFFLINE . . . . .	Number	 00001000h   
+FILE_ATTRIBUTE_READONLY  . . . .	Number	 00000001h   
+FILE_ATTRIBUTE_REPARSE_POINT . .	Number	 00000400h   
+FILE_ATTRIBUTE_SPARSE_FILE . . .	Number	 00000200h   
+FILE_ATTRIBUTE_SYSTEM  . . . . .	Number	 00000004h   
+FILE_ATTRIBUTE_TEMPORARY . . . .	Number	 00000100h   
+FILE_BEGIN . . . . . . . . . . .	Number	 00000000h   
+FILE_CURRENT . . . . . . . . . .	Number	 00000001h   
+FILE_DELETE_CHILD  . . . . . . .	Number	 00000040h   
+FILE_END . . . . . . . . . . . .	Number	 00000002h   
+FILE_READ_DATA . . . . . . . . .	Number	 00000001h   
+FILE_SHARE_DELETE  . . . . . . .	Number	 00000004h   
+FILE_SHARE_READ  . . . . . . . .	Number	 00000001h   
+FILE_SHARE_WRITE . . . . . . . .	Number	 00000002h   
+FILE_WRITE_DATA  . . . . . . . .	Number	 00000002h   
+FOCUS_EVENT  . . . . . . . . . .	Number	 00000010h   
+FORMAT_MESSAGE_ALLOCATE_BUFFER .	Number	 00000100h   
+FORMAT_MESSAGE_FROM_SYSTEM . . .	Number	 00001000h   
+FormatMessage  . . . . . . . . .	Text   	 FormatMessageA
+GENERIC_ALL  . . . . . . . . . .	Number	 10000000h   
+GENERIC_EXECUTE  . . . . . . . .	Number	 20000000h   
+GENERIC_READ . . . . . . . . . .	Number	 -80000000h   
+GENERIC_WRITE  . . . . . . . . .	Number	 40000000h   
+GetCommandLine . . . . . . . . .	Text   	 GetCommandLineA
+HANDLE . . . . . . . . . . . . .	Text   	 DWORD
+HEAP_GENERATE_EXCEPTIONS . . . .	Number	 00000004h   
+HEAP_GROWABLE  . . . . . . . . .	Number	 00000002h   
+HEAP_NO_SERIALIZE  . . . . . . .	Number	 00000001h   
+HEAP_REALLOC_IN_PLACE_ONLY . . .	Number	 00000010h   
+HEAP_ZERO_MEMORY . . . . . . . .	Number	 00000008h   
+IDABORT  . . . . . . . . . . . .	Number	 00000003h   
+IDCANCEL . . . . . . . . . . . .	Number	 00000002h   
+IDCLOSE  . . . . . . . . . . . .	Number	 00000008h   
+IDCONTINUE . . . . . . . . . . .	Number	 0000000Bh   
+IDHELP . . . . . . . . . . . . .	Number	 00000009h   
+IDIGNORE . . . . . . . . . . . .	Number	 00000005h   
+IDNO . . . . . . . . . . . . . .	Number	 00000007h   
+IDOK . . . . . . . . . . . . . .	Number	 00000001h   
+IDRETRY  . . . . . . . . . . . .	Number	 00000004h   
+IDTIMEOUT  . . . . . . . . . . .	Number	 00007D00h   
+IDTRYAGAIN . . . . . . . . . . .	Number	 0000000Ah   
+IDYES  . . . . . . . . . . . . .	Number	 00000006h   
+INVALID_HANDLE_VALUE . . . . . .	Number	 -00000001h   
+KBDOWN_FLAG  . . . . . . . . . .	Number	 00000001h   
+KEY_EVENT  . . . . . . . . . . .	Number	 00000001h   
+KEY_MASKS  . . . . . . . . . . .	Number	 0000001Fh   
+KeyLen . . . . . . . . . . . . .	DWord	 0000012E _DATA	
+LEFT_ALT_PRESSED . . . . . . . .	Number	 00000002h   
+LEFT_CTRL_PRESSED  . . . . . . .	Number	 00000008h   
+MB_ABORTRETRYIGNORE  . . . . . .	Number	 00000002h   
+MB_APPLMODAL . . . . . . . . . .	Number	 00000000h   
+MB_CANCELTRYCONTINUE . . . . . .	Number	 00000006h   
+MB_DEFBUTTON1  . . . . . . . . .	Number	 00000000h   
+MB_DEFBUTTON2  . . . . . . . . .	Number	 00000100h   
+MB_DEFBUTTON3  . . . . . . . . .	Number	 00000200h   
+MB_DEFBUTTON4  . . . . . . . . .	Number	 00000300h   
+MB_HELP  . . . . . . . . . . . .	Number	 00004000h   
+MB_ICONASTERISK  . . . . . . . .	Number	 00000040h   
+MB_ICONERROR . . . . . . . . . .	Number	 00000010h   
+MB_ICONEXCLAMATION . . . . . . .	Number	 00000030h   
+MB_ICONHAND  . . . . . . . . . .	Number	 00000010h   
+MB_ICONINFORMATION . . . . . . .	Number	 00000040h   
+MB_ICONQUESTION  . . . . . . . .	Number	 00000020h   
+MB_ICONSTOP  . . . . . . . . . .	Number	 00000010h   
+MB_ICONWARNING . . . . . . . . .	Number	 00000030h   
+MB_OKCANCEL  . . . . . . . . . .	Number	 00000001h   
+MB_OK  . . . . . . . . . . . . .	Number	 00000000h   
+MB_RETRYCANCEL . . . . . . . . .	Number	 00000005h   
+MB_SYSTEMMODAL . . . . . . . . .	Number	 00001000h   
+MB_TASKMODAL . . . . . . . . . .	Number	 00002000h   
+MB_USERICON  . . . . . . . . . .	Number	 00000080h   
+MB_YESNOCANCEL . . . . . . . . .	Number	 00000003h   
+MB_YESNO . . . . . . . . . . . .	Number	 00000004h   
+MENU_EVENT . . . . . . . . . . .	Number	 00000008h   
+MOUSE_EVENT  . . . . . . . . . .	Number	 00000002h   
+MessageBox . . . . . . . . . . .	Text   	 MessageBoxA
+Msg1 . . . . . . . . . . . . . .	Byte	 0000006F _DATA	
+Msg2 . . . . . . . . . . . . . .	Byte	 00000087 _DATA	
+Msg3 . . . . . . . . . . . . . .	Byte	 0000009F _DATA	
+Msg4 . . . . . . . . . . . . . .	Byte	 000000B8 _DATA	
+Msg5 . . . . . . . . . . . . . .	Byte	 000000D4 _DATA	
+NULL . . . . . . . . . . . . . .	Number	 00000000h   
+NUMLOCK_ON . . . . . . . . . . .	Number	 00000020h   
+OPEN_ALWAYS  . . . . . . . . . .	Number	 00000004h   
+OPEN_EXISTING  . . . . . . . . .	Number	 00000003h   
+PeekConsoleInput . . . . . . . .	Text   	 PeekConsoleInputA
+RIGHT_ALT_PRESSED  . . . . . . .	Number	 00000001h   
+RIGHT_CTRL_PRESSED . . . . . . .	Number	 00000004h   
+ReadConsoleInput . . . . . . . .	Text   	 ReadConsoleInputA
+ReadConsole  . . . . . . . . . .	Text   	 ReadConsoleA
+SCROLLLOCK_ON  . . . . . . . . .	Number	 00000040h   
+SHIFT_MASK . . . . . . . . . . .	Number	 00000010h   
+SHIFT_PRESSED  . . . . . . . . .	Number	 00000010h   
+STD_ERROR_HANDLE . . . . . . . .	Number	 -0000000Ch   
+STD_INPUT_HANDLE . . . . . . . .	Number	 -0000000Ah   
+STD_OUTPUT_HANDLE  . . . . . . .	Number	 -0000000Bh   
+SetConsoleTitle  . . . . . . . .	Text   	 SetConsoleTitleA
+TAB  . . . . . . . . . . . . . .	Number	 00000009h   
+TRUE . . . . . . . . . . . . . .	Number	 00000001h   
+TRUNCATE_EXISTING  . . . . . . .	Number	 00000005h   
+VK_11  . . . . . . . . . . . . .	Number	 000000BDh   
+VK_12  . . . . . . . . . . . . .	Number	 000000BBh   
+VK_ADD . . . . . . . . . . . . .	Number	 0000006Bh   
+VK_BACK  . . . . . . . . . . . .	Number	 00000008h   
+VK_CANCEL  . . . . . . . . . . .	Number	 00000003h   
+VK_CAPITAL . . . . . . . . . . .	Number	 00000014h   
+VK_CLEAR . . . . . . . . . . . .	Number	 0000000Ch   
+VK_CONTROL . . . . . . . . . . .	Number	 00000011h   
+VK_DECIMAL . . . . . . . . . . .	Number	 0000006Eh   
+VK_DELETE  . . . . . . . . . . .	Number	 0000002Eh   
+VK_DIVIDE  . . . . . . . . . . .	Number	 0000006Fh   
+VK_DOWN  . . . . . . . . . . . .	Number	 00000028h   
+VK_END . . . . . . . . . . . . .	Number	 00000023h   
+VK_ESCAPE  . . . . . . . . . . .	Number	 0000001Bh   
+VK_EXECUTE . . . . . . . . . . .	Number	 0000002Bh   
+VK_F10 . . . . . . . . . . . . .	Number	 00000079h   
+VK_F11 . . . . . . . . . . . . .	Number	 0000007Ah   
+VK_F12 . . . . . . . . . . . . .	Number	 0000007Bh   
+VK_F13 . . . . . . . . . . . . .	Number	 0000007Ch   
+VK_F14 . . . . . . . . . . . . .	Number	 0000007Dh   
+VK_F15 . . . . . . . . . . . . .	Number	 0000007Eh   
+VK_F16 . . . . . . . . . . . . .	Number	 0000007Fh   
+VK_F17 . . . . . . . . . . . . .	Number	 00000080h   
+VK_F18 . . . . . . . . . . . . .	Number	 00000081h   
+VK_F19 . . . . . . . . . . . . .	Number	 00000082h   
+VK_F1  . . . . . . . . . . . . .	Number	 00000070h   
+VK_F20 . . . . . . . . . . . . .	Number	 00000083h   
+VK_F21 . . . . . . . . . . . . .	Number	 00000084h   
+VK_F22 . . . . . . . . . . . . .	Number	 00000085h   
+VK_F23 . . . . . . . . . . . . .	Number	 00000086h   
+VK_F24 . . . . . . . . . . . . .	Number	 00000087h   
+VK_F2  . . . . . . . . . . . . .	Number	 00000071h   
+VK_F3  . . . . . . . . . . . . .	Number	 00000072h   
+VK_F4  . . . . . . . . . . . . .	Number	 00000073h   
+VK_F5  . . . . . . . . . . . . .	Number	 00000074h   
+VK_F6  . . . . . . . . . . . . .	Number	 00000075h   
+VK_F7  . . . . . . . . . . . . .	Number	 00000076h   
+VK_F8  . . . . . . . . . . . . .	Number	 00000077h   
+VK_F9  . . . . . . . . . . . . .	Number	 00000078h   
+VK_HELP  . . . . . . . . . . . .	Number	 0000002Fh   
+VK_HOME  . . . . . . . . . . . .	Number	 00000024h   
+VK_INSERT  . . . . . . . . . . .	Number	 0000002Dh   
+VK_LBUTTON . . . . . . . . . . .	Number	 00000001h   
+VK_LCONTROL  . . . . . . . . . .	Number	 000000A2h   
+VK_LEFT  . . . . . . . . . . . .	Number	 00000025h   
+VK_LMENU . . . . . . . . . . . .	Number	 000000A4h   
+VK_LSHIFT  . . . . . . . . . . .	Number	 000000A0h   
+VK_MENU  . . . . . . . . . . . .	Number	 00000012h   
+VK_MULTIPLY  . . . . . . . . . .	Number	 0000006Ah   
+VK_NEXT  . . . . . . . . . . . .	Number	 00000022h   
+VK_NUMLOCK . . . . . . . . . . .	Number	 00000090h   
+VK_NUMPAD0 . . . . . . . . . . .	Number	 00000060h   
+VK_NUMPAD1 . . . . . . . . . . .	Number	 00000061h   
+VK_NUMPAD2 . . . . . . . . . . .	Number	 00000062h   
+VK_NUMPAD3 . . . . . . . . . . .	Number	 00000063h   
+VK_NUMPAD4 . . . . . . . . . . .	Number	 00000064h   
+VK_NUMPAD5 . . . . . . . . . . .	Number	 00000065h   
+VK_NUMPAD6 . . . . . . . . . . .	Number	 00000066h   
+VK_NUMPAD7 . . . . . . . . . . .	Number	 00000067h   
+VK_NUMPAD8 . . . . . . . . . . .	Number	 00000068h   
+VK_NUMPAD9 . . . . . . . . . . .	Number	 00000069h   
+VK_PAUSE . . . . . . . . . . . .	Number	 00000013h   
+VK_PRINT . . . . . . . . . . . .	Number	 0000002Ah   
+VK_PRIOR . . . . . . . . . . . .	Number	 00000021h   
+VK_RBUTTON . . . . . . . . . . .	Number	 00000002h   
+VK_RCONTROL  . . . . . . . . . .	Number	 000000A3h   
+VK_RETURN  . . . . . . . . . . .	Number	 0000000Dh   
+VK_RIGHT . . . . . . . . . . . .	Number	 00000027h   
+VK_RMENU . . . . . . . . . . . .	Number	 000000A5h   
+VK_RSHIFT  . . . . . . . . . . .	Number	 000000A1h   
+VK_SCROLL  . . . . . . . . . . .	Number	 00000091h   
+VK_SEPARATER . . . . . . . . . .	Number	 0000006Ch   
+VK_SHIFT . . . . . . . . . . . .	Number	 00000010h   
+VK_SNAPSHOT  . . . . . . . . . .	Number	 0000002Ch   
+VK_SPACE . . . . . . . . . . . .	Number	 00000020h   
+VK_SUBTRACT  . . . . . . . . . .	Number	 0000006Dh   
+VK_TAB . . . . . . . . . . . . .	Number	 00000009h   
+VK_UP  . . . . . . . . . . . . .	Number	 00000026h   
+WINDOW_BUFFER_SIZE_EVENT . . . .	Number	 00000004h   
+WriteConsoleOutputCharacter  . .	Text   	 WriteConsoleOutputCharacterA
+WriteConsole . . . . . . . . . .	Text   	 WriteConsoleA
+black  . . . . . . . . . . . . .	Number	 00000000h   
+blue . . . . . . . . . . . . . .	Number	 00000001h   
+brown  . . . . . . . . . . . . .	Number	 00000006h   
+bssBuf . . . . . . . . . . . . .	Byte	 00000967 _DATA	
+currLetter . . . . . . . . . . .	Byte	 00000132 _DATA	
+cyan . . . . . . . . . . . . . .	Number	 00000003h   
+decMsg . . . . . . . . . . . . .	Byte	 0000057F _DATA	
+errorMsg1  . . . . . . . . . . .	Byte	 00000000 _DATA	
+errorMsg2  . . . . . . . . . . .	Byte	 00000016 _DATA	
+errorMsg3  . . . . . . . . . . .	Byte	 0000002E _DATA	
+errorMsg4  . . . . . . . . . . .	Byte	 0000004C _DATA	
+exit . . . . . . . . . . . . . .	Text   	 INVOKE ExitProcess,0
+fileDir  . . . . . . . . . . . .	DWord	 000000F8 _DATA	
+fileFound  . . . . . . . . . . .	Byte	 00000100 _DATA	
+filePath . . . . . . . . . . . .	Byte	 00000133 _DATA	
+fileSize . . . . . . . . . . . .	DWord	 000000FC _DATA	
+gray . . . . . . . . . . . . . .	Number	 00000008h   
+green  . . . . . . . . . . . . .	Number	 00000002h   
+key  . . . . . . . . . . . . . .	Byte	 0000012D _DATA	
+lengthRead . . . . . . . . . . .	DWord	 00000114 _DATA	
+lengthR  . . . . . . . . . . . .	DWord	 00000110 _DATA	
+lightBlue  . . . . . . . . . . .	Number	 00000009h   
+lightCyan  . . . . . . . . . . .	Number	 0000000Bh   
+lightGray  . . . . . . . . . . .	Number	 00000007h   
+lightGreen . . . . . . . . . . .	Number	 0000000Ah   
+lightMagenta . . . . . . . . . .	Number	 0000000Dh   
+lightRed . . . . . . . . . . . .	Number	 0000000Ch   
+magenta  . . . . . . . . . . . .	Number	 00000005h   
+maxLength  . . . . . . . . . . .	DWord	 000000F4 _DATA	
+msgLen . . . . . . . . . . . . .	DWord	 00000128 _DATA	
+msg  . . . . . . . . . . . . . .	Byte	 00000197 _DATA	
+outputDir  . . . . . . . . . . .	Byte	 00000101 _DATA	
+outputHandle . . . . . . . . . .	DWord	 0000010C _DATA	
+programChoice  . . . . . . . . .	Byte	 000000F3 _DATA	
+ptrForN  . . . . . . . . . . . .	DWord	 0000011C _DATA	
+red  . . . . . . . . . . . . . .	Number	 00000004h   
+tmpVar1  . . . . . . . . . . . .	DWord	 00000120 _DATA	
+tmpVar2  . . . . . . . . . . . .	DWord	 00000124 _DATA	
+toWrite  . . . . . . . . . . . .	DWord	 00000118 _DATA	
+twoDigit . . . . . . . . . . . .	Byte	 0000012C _DATA	
+white  . . . . . . . . . . . . .	Number	 0000000Fh   
+wsprintf . . . . . . . . . . . .	Text   	 wsprintfA
+yellow . . . . . . . . . . . . .	Number	 0000000Eh   
+
+	   3 Warnings
+	   0 Errors
